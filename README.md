@@ -1,48 +1,42 @@
 # poc-bug-with-ai
 
-> **"Com MCP" PoC** — A QA engineer describes a bug in plain language; the AI agent autonomously opens a Jira issue.
+> **"Com MCP" PoC** — O analista N1 descreve um bug em linguagem natural; o agente de IA abre, enriquece e escalona chamados Jira automaticamente.
 
 ```
-QA → python main.py "..." → Agno Agent (Gemini) → Jira MCP Server → Bug aberto ✓
+N1 → python main.py → Agno Agent (HuggingFace / Qwen2.5-72B) → Jira MCP Server → Chamado criado ✓
 ```
 
 ---
 
 ## Setup
 
-### 1. Install dependencies
+### 1. Instalar dependências
 
 ```bash
 uv sync
 ```
 
-### 2. Configure credentials
+### 2. Configurar credenciais
 
-Copy the example file and fill in your values:
+Copie o arquivo de exemplo e preencha com seus valores:
 
 ```bash
 cp .env.example .env
 ```
 
-| Variable | Description |
+| Variável | Descrição |
 |---|---|
-| `GOOGLE_API_KEY` | Gemini API key — [get one here](https://aistudio.google.com/app/apikey) |
-| `JIRA_URL` | Your Atlassian instance URL, e.g. `https://acme.atlassian.net` |
-| `JIRA_EMAIL` | Email linked to your Atlassian account |
-| `JIRA_API_TOKEN` | [Generate an API token](https://id.atlassian.com/manage-profile/security/api-tokens) |
-| `JIRA_PROJECT_KEY` | Key of the project where bugs will be created (e.g. `PROJ`) |
+| `HF_TOKEN` | Token de acesso HuggingFace — [gere aqui](https://huggingface.co/settings/tokens) |
+| `JIRA_URL` | URL da instância Atlassian, ex: `https://acme.atlassian.net` |
+| `JIRA_EMAIL` | E-mail vinculado à sua conta Atlassian |
+| `JIRA_API_TOKEN` | [Gere um API token](https://id.atlassian.com/manage-profile/security/api-tokens) |
+| `JIRA_PROJECT_KEY` | Chave do projeto onde os tickets serão criados (ex: `PROJ`) |
 
 ---
 
-## Usage
+## Uso
 
-### Single-shot (recommended for scripting)
-
-```bash
-python main.py "Login button crashes on Safari iOS 17 after 3 rapid taps"
-```
-
-### Interactive chat loop
+### Modo interativo (chat loop)
 
 ```bash
 python main.py
@@ -51,42 +45,50 @@ python main.py
 ```
 🤖 Bug Reporter Agent (type 'exit' or Ctrl-C to quit)
 
-You: The checkout page goes blank when the user applies a promo code on Firefox
+You: O botão de checkout trava no Firefox quando o usuário aplica um cupom
 ...
-✅ Bug created: PROJ-42
+✅ Ticket criado: PROJ-42
 🔗 https://acme.atlassian.net/browse/PROJ-42
 ```
 
 ---
 
-## Architecture
+## Arquitetura
 
 ```
-main.py  (Agno Agent + Gemini)
+main.py  (Agno Agent + HuggingFace / Qwen2.5-72B-Instruct)
   └── MCPTools (stdio)
         └── jira_mcp_server.py  (FastMCP)
-              ├── get_project_info()
-              ├── search_issues()      ← duplicate check
-              └── create_issue()       ← opens the bug
+              ├── get_project_info()   [excluída do agente — usada só para diagnóstico]
+              ├── search_issues()      ← verifica duplicatas antes de criar
+              ├── create_issue()       ← abre o chamado estruturado
+              ├── get_issue_details()  ← consulta status e histórico
+              ├── add_comment()        ← adiciona contexto ao ticket
+              └── list_my_reported()   ← histórico do N1
 ```
 
-### Agent workflow
+### Cenários suportados pelo agente
 
-1. QA provides a plain-language bug description.
-2. Agent calls `search_issues` to look for duplicates.
-3. If none found, agent calls `create_issue` with a structured report.
-4. Agent prints the Jira issue key and URL.
+| Cenário | Exemplo de entrada N1 | Tools usadas |
+|---------|----------------------|--------------| 
+| **Abrir chamado** | "O login trava no Safari" | `search_issues` → `create_issue` |
+| **Verificar ticket** | "Qual o status do PROJ-42?" | `get_issue_details` |
+| **Adicionar detalhes** | "Esqueci: só acontece no Chrome v124" | `add_comment` |
+| **Ver histórico** | "Quais tickets abri essa semana?" | `list_my_reported` |
+
+> **Importante**: O agente **não move cards, não atribui e não resolve** tickets.
+> Essas ações pertencem ao N2. O agente é o tradutor da dor do N1.
 
 ---
 
-## Project structure
+## Estrutura do projeto
 
 ```
 poc-bug-with-ai/
-├── main.py               # Agno agent entry point
-├── jira_mcp_server.py    # FastMCP Jira tools server
-├── pyproject.toml        # Python project & dependencies
-├── .env.example          # Environment variable template
-├── .env                  # Your credentials (gitignored)
+├── main.py               # Entry point do agente Agno
+├── jira_mcp_server.py    # Servidor FastMCP com ferramentas Jira
+├── pyproject.toml        # Projeto Python e dependências (uv)
+├── .env.example          # Template de variáveis de ambiente
+├── .env                  # Suas credenciais (no .gitignore)
 └── README.md
 ```

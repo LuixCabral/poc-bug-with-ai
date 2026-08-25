@@ -21,3 +21,6 @@ build/
 # uv
 .uv/
 uv.lock
+
+# Runtime / session data
+tmp/
