@@ -8,7 +8,6 @@ Tools:
   - create_issue       : Cria uma nova issue (Task) no projeto padrão.
   - get_issue_details  : Retorna detalhes completos (status, prioridade, comentários).
   - add_comment        : Adiciona um comentário com contexto a um ticket existente.
-  - set_priority       : Atualiza a prioridade de um ticket existente.
   - list_my_reported   : Lista tickets reportados por um dado endereço de e-mail.
 """
 
@@ -16,13 +15,23 @@ from fastmcp import FastMCP
 from jira.exceptions import JIRAError
 
 from jira_mcp.client import get_client, get_default_project, issue_url
+from schemas.issue import (
+    AddCommentResponse,
+    AgentNote,
+    CommentItem,
+    IssueDetailsResponse,
+    IssueItemResponse,
+    PriorityEnum,
+    ProjectInfoResponse,
+    ReportedIssueItem,
+)
 
 
 def register_tools(mcp: FastMCP) -> None:
     """Registra todas as ferramentas no servidor FastMCP fornecido."""
 
     @mcp.tool(title="Get Project Info")
-    def get_project_info(project_key: str = "") -> dict:
+    def get_project_info(project_key: str = "") -> ProjectInfoResponse | dict:
         """
         Returns issue types and components for a Jira project.
 
@@ -36,19 +45,19 @@ def register_tools(mcp: FastMCP) -> None:
             project = jira.project(key)
             issue_types = [it.name for it in jira.issue_types_for_project(key)]
             components = [c.name for c in jira.project_components(key)]
-            return {
-                "project_key": project.key,
-                "project_name": project.name,
-                "issue_types": issue_types,
-                "components": components,
-            }
+            return ProjectInfoResponse(
+                project_key=project.key,
+                project_name=project.name,
+                issue_types=issue_types,
+                components=components,
+            )
         except JIRAError as e:
             return {"error": f"Jira API error [{e.status_code}]: {e.text}"}
         except Exception as e:
             return {"error": f"Unexpected error: {str(e)}"}
 
     @mcp.tool(title="Search Issues")
-    def search_issues(query: str, max_results: int = 5) -> list[dict]:
+    def search_issues(query: str, max_results: int = 5) -> list[IssueItemResponse] | list[dict]:
         """
         Searches for existing Jira issues to check for duplicates before opening
         a new ticket. Accepts either a plain-text query or a full JQL string.
@@ -67,12 +76,12 @@ def register_tools(mcp: FastMCP) -> None:
 
             issues = jira.search_issues(jql, maxResults=max_results)
             return [
-                {
-                    "key": issue.key,
-                    "summary": issue.fields.summary,
-                    "status": issue.fields.status.name,
-                    "url": issue_url(issue.key),
-                }
+                IssueItemResponse(
+                    key=issue.key,
+                    summary=issue.fields.summary,
+                    status=issue.fields.status.name,
+                    url=issue_url(issue.key),
+                )
                 for issue in issues
             ]
         except JIRAError as e:
@@ -84,8 +93,8 @@ def register_tools(mcp: FastMCP) -> None:
     def create_issue(
         summary: str,
         description: str,
-        priority: str = "Medium",
-    ) -> dict:
+        priority: PriorityEnum = PriorityEnum.MEDIUM,
+    ) -> IssueItemResponse | dict:
         """
         Creates a new Jira issue (Task) in the default project.
 
@@ -106,21 +115,22 @@ def register_tools(mcp: FastMCP) -> None:
                 "summary": summary,
                 "description": description,
                 "issuetype": {"name": "Task"},
-                "priority": {"name": priority},
+                "priority": {"name": priority.value},
             }
             new_issue = jira.create_issue(fields=issue_dict)
-            return {
-                "key": new_issue.key,
-                "summary": new_issue.fields.summary,
-                "url": issue_url(new_issue.key),
-            }
+            return IssueItemResponse(
+                key=new_issue.key,
+                summary=new_issue.fields.summary,
+                status=new_issue.fields.status.name,
+                url=issue_url(new_issue.key),
+            )
         except JIRAError as e:
             return {"error": f"Jira API error [{e.status_code}]: {e.text}"}
         except Exception as e:
             return {"error": f"Unexpected error: {str(e)}"}
 
     @mcp.tool(title="Get Issue Details")
-    def get_issue_details(issue_key: str) -> dict:
+    def get_issue_details(issue_key: str) -> IssueDetailsResponse | dict:
         """
         Returns full details of a Jira ticket so that N1 can check whether a
         similar issue already exists before opening a new one, or track the
@@ -141,32 +151,32 @@ def register_tools(mcp: FastMCP) -> None:
 
             comments_raw = getattr(fields.comment, "comments", [])
             recent_comments = [
-                {
-                    "author": c.author.displayName,
-                    "body": c.body[:300] + ("..." if len(c.body) > 300 else ""),
-                    "created": c.created[:10],
-                }
+                CommentItem(
+                    author=c.author.displayName,
+                    body=c.body[:300] + ("..." if len(c.body) > 300 else ""),
+                    created=c.created[:10],
+                )
                 for c in comments_raw[-3:]
             ]
 
-            return {
-                "key": issue.key,
-                "summary": fields.summary,
-                "status": fields.status.name,
-                "priority": fields.priority.name if fields.priority else "Não definida",
-                "assignee": fields.assignee.displayName if fields.assignee else "Não atribuído",
-                "created": fields.created[:10],
-                "updated": fields.updated[:10],
-                "recent_comments": recent_comments,
-                "url": issue_url(issue.key),
-            }
+            return IssueDetailsResponse(
+                key=issue.key,
+                summary=fields.summary,
+                status=fields.status.name,
+                priority=fields.priority.name if fields.priority else "Não definida",
+                assignee=fields.assignee.displayName if fields.assignee else "Não atribuído",
+                created=fields.created[:10],
+                updated=fields.updated[:10],
+                recent_comments=recent_comments,
+                url=issue_url(issue.key),
+            )
         except JIRAError as e:
             return {"error": f"Jira API error [{e.status_code}]: {e.text}"}
         except Exception as e:
             return {"error": f"Unexpected error: {str(e)}"}
 
     @mcp.tool(title="Add Comment")
-    def add_comment(issue_key: str, comment: str) -> dict:
+    def add_comment(issue_key: str, comment: str) -> AddCommentResponse | dict:
         """
         Appends a comment to an existing Jira ticket.
 
@@ -181,21 +191,23 @@ def register_tools(mcp: FastMCP) -> None:
         try:
             jira = get_client()
             new_comment = jira.add_comment(issue_key, comment)
-            return {
-                "issue_key": issue_key,
-                "comment_id": new_comment.id,
-                "author": new_comment.author.displayName,
-                "created": new_comment.created[:10],
-                "url": issue_url(issue_key),
-                "message": f"Comentário adicionado com sucesso ao ticket {issue_key}.",
-            }
+            return AddCommentResponse(
+                issue_key=issue_key,
+                comment_id=new_comment.id,
+                author=new_comment.author.displayName,
+                created=new_comment.created[:10],
+                url=issue_url(issue_key),
+                message=f"Comentário adicionado com sucesso ao ticket {issue_key}.",
+            )
         except JIRAError as e:
             return {"error": f"Jira API error [{e.status_code}]: {e.text}"}
         except Exception as e:
             return {"error": f"Unexpected error: {str(e)}"}
 
     @mcp.tool(title="List My Reported Issues")
-    def list_my_reported(email: str, status: str = "", max_results: int = 10) -> list[dict]:
+    def list_my_reported(
+        email: str, status: str = "", max_results: int = 10
+    ) -> list[ReportedIssueItem | AgentNote | dict]:
         """
         Lists Jira tickets reported by a given e-mail address.
         Issues with status 'Concluído' are NEVER included in the result list.
@@ -232,7 +244,7 @@ def register_tools(mcp: FastMCP) -> None:
             )
             completed_issues = jira.search_issues(completed_jql, maxResults=1)
 
-            result = []
+            result: list = []
             if completed_issues:
                 result.append(
                     {
@@ -246,13 +258,13 @@ def register_tools(mcp: FastMCP) -> None:
 
             result.extend(
                 [
-                    {
-                        "key": issue.key,
-                        "summary": issue.fields.summary,
-                        "status": issue.fields.status.name,
-                        "created": issue.fields.created[:10],
-                        "url": issue_url(issue.key),
-                    }
+                    ReportedIssueItem(
+                        key=issue.key,
+                        summary=issue.fields.summary,
+                        status=issue.fields.status.name,
+                        created=issue.fields.created[:10],
+                        url=issue_url(issue.key),
+                    )
                     for issue in issues
                 ]
             )
