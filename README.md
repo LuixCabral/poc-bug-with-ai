@@ -53,12 +53,29 @@ You: O botão de checkout trava no Firefox quando o usuário aplica um cupom
 
 ---
 
+### Modo API (FastAPI + PostgreSQL)
+
+```bash
+uv run uvicorn api.app:app --reload --port 8000
+```
+
+- **Healthcheck**: `GET /api/health`
+- **Chat**: `POST /api/chat`
+  ```json
+  {
+    "message": "O botão de checkout trava no Firefox",
+    "session_id": "optional-uuid-here"
+  }
+  ```
+
+---
+
 ## Arquitetura
 
 ```
-main.py  (Agno Agent + HuggingFace / Qwen2.5-72B-Instruct)
+main.py (CLI) / api/app.py (FastAPI)
   └── MCPTools (stdio)
-        └── jira_mcp_server.py  (FastMCP)
+        └── jira_mcp.server (FastMCP)
               ├── get_project_info()   [excluída do agente — usada só para diagnóstico]
               ├── search_issues()      ← verifica duplicatas antes de criar
               ├── create_issue()       ← abre o chamado estruturado
@@ -85,8 +102,20 @@ main.py  (Agno Agent + HuggingFace / Qwen2.5-72B-Instruct)
 
 ```
 poc-bug-with-ai/
-├── main.py               # Entry point do agente Agno
-├── jira_mcp_server.py    # Servidor FastMCP com ferramentas Jira
+├── api/                  # Camada HTTP FastAPI
+│   ├── app.py            # Inicialização e lifespan com MCPTools + PostgresDb
+│   ├── dependencies.py   # Injeção de dependência do Agent
+│   ├── routers/          # Rotas (/api/chat, /api/health)
+│   └── schemas/          # Schemas Pydantic da API HTTP
+├── jira_mcp/             # Servidor e ferramentas FastMCP Jira
+│   ├── client.py         # Cliente Atlassian Jira SDK
+│   ├── config.py         # Carregamento de variáveis de ambiente
+│   ├── server.py         # Entry point do servidor FastMCP
+│   ├── service.py        # Lógica de negócio e chamadas Jira
+│   └── tools.py          # Registro de tools FastMCP
+├── jira_schemas/         # Schemas Pydantic das ferramentas Jira MCP
+│   └── issue.py
+├── main.py               # Entry point do CLI e factory build_agent()
 ├── pyproject.toml        # Projeto Python e dependências (uv)
 ├── .env.example          # Template de variáveis de ambiente
 ├── .env                  # Suas credenciais (no .gitignore)

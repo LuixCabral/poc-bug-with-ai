@@ -20,7 +20,7 @@ from fastmcp import FastMCP
 from jira.exceptions import JIRAError
 
 from jira_mcp.service import JiraService, UserNotFoundError
-from schemas.issue import (
+from jira_schemas.issue import (
     AddCommentResponse,
     AgentNote,
     IssueDetailsResponse,

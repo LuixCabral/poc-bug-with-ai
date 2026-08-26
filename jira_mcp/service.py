@@ -4,7 +4,7 @@ from jira import JIRA
 from jira.exceptions import JIRAError
 
 from jira_mcp.client import get_client, get_default_project, issue_url
-from schemas.issue import (
+from jira_schemas.issue import (
     AddCommentResponse,
     AgentNote,
     CommentItem,

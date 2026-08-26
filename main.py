@@ -5,7 +5,8 @@ import asyncio
 from dotenv import load_dotenv
 from agno.agent import Agent
 from agno.models.huggingface import HuggingFace
-from agno.db.json import JsonDb
+from agno.db.base import BaseDb, AsyncBaseDb
+from agno.db.postgres import AsyncPostgresDb
 from agno.tools.mcp import MCPTools
 from mcp import StdioServerParameters
 
@@ -72,14 +73,14 @@ Quando o N1 pedir um histórico (ex: "quais tickets eu abri essa semana?",
 # ─── Agent factory ────────────────────────────────────────────────────────────
 
 
-def build_agent(mcp_tools: MCPTools) -> Agent:
+def build_agent(mcp_tools: MCPTools, db: BaseDb | AsyncBaseDb | None = None) -> Agent:
     return Agent(
         model=HuggingFace(id="Qwen/Qwen3.8-27B"),
         tools=[mcp_tools],
         tool_call_limit=6,
         instructions=SYSTEM_PROMPT,
         markdown=True,
-        db=JsonDb(db_path="tmp/agent_db"),
+        db=AsyncPostgresDb(db_url=os.environ.get("DATABASE_URL")),
         add_history_to_context=True,
         read_chat_history=True,
         num_history_messages=8,
