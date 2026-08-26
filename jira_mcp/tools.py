@@ -2,6 +2,11 @@
 Ferramentas MCP expostas ao agente.
 Registradas via register_tools(mcp) para manter o servidor desacoplado das tools.
 
+Cada tool atua como um adapter MCP fino: recebe os parâmetros do LLM,
+delega a execução ao JiraService e trata eventuais erros retornando
+mensagens padronizadas. A lógica de negócio e comunicação com o Jira SDK
+reside exclusivamente em `jira_mcp.service`.
+
 Tools:
   - get_project_info   : Retorna tipos de issue e componentes de um projeto.
   - search_issues      : Busca issues existentes via JQL (verificação de duplicatas).
@@ -14,11 +19,10 @@ Tools:
 from fastmcp import FastMCP
 from jira.exceptions import JIRAError
 
-from jira_mcp.client import get_client, get_default_project, issue_url
+from jira_mcp.service import JiraService, UserNotFoundError
 from schemas.issue import (
     AddCommentResponse,
     AgentNote,
-    CommentItem,
     IssueDetailsResponse,
     IssueItemResponse,
     PriorityEnum,
@@ -27,8 +31,17 @@ from schemas.issue import (
 )
 
 
-def register_tools(mcp: FastMCP) -> None:
-    """Registra todas as ferramentas no servidor FastMCP fornecido."""
+def register_tools(mcp: FastMCP, service: JiraService | None = None) -> None:
+    """
+    Registra todas as ferramentas no servidor FastMCP fornecido.
+
+    Args:
+        mcp:     Instância do servidor FastMCP.
+        service: Instância opcional de JiraService. Se não fornecida, uma nova
+                 instância com configuração padrão (via variáveis de ambiente)
+                 será criada. Útil para injeção de dependência em testes.
+    """
+    _service = service or JiraService()
 
     @mcp.tool(title="Get Project Info")
     def get_project_info(project_key: str = "") -> ProjectInfoResponse | dict:
@@ -39,18 +52,8 @@ def register_tools(mcp: FastMCP) -> None:
             project_key: The Jira project key (e.g. 'PROJ'). Defaults to the
                          value of the JIRA_PROJECT_KEY environment variable.
         """
-        key = project_key or get_default_project()
         try:
-            jira = get_client()
-            project = jira.project(key)
-            issue_types = [it.name for it in jira.issue_types_for_project(key)]
-            components = [c.name for c in jira.project_components(key)]
-            return ProjectInfoResponse(
-                project_key=project.key,
-                project_name=project.name,
-                issue_types=issue_types,
-                components=components,
-            )
+            return _service.get_project_info(project_key or None)
         except JIRAError as e:
             return {"error": f"Jira API error [{e.status_code}]: {e.text}"}
         except Exception as e:
@@ -66,24 +69,8 @@ def register_tools(mcp: FastMCP) -> None:
             query:       Plain-text search terms or a full JQL expression.
             max_results: Maximum number of results to return (default 5).
         """
-        key = get_default_project()
         try:
-            jira = get_client()
-            if "=" not in query and "ORDER BY" not in query.upper():
-                jql = f'project = "{key}" AND text ~ "{query}" ORDER BY created DESC'
-            else:
-                jql = query
-
-            issues = jira.search_issues(jql, maxResults=max_results)
-            return [
-                IssueItemResponse(
-                    key=issue.key,
-                    summary=issue.fields.summary,
-                    status=issue.fields.status.name,
-                    url=issue_url(issue.key),
-                )
-                for issue in issues
-            ]
+            return _service.search_issues(query, max_results)
         except JIRAError as e:
             return [{"error": f"Jira API error [{e.status_code}]: {e.text}"}]
         except Exception as e:
@@ -107,23 +94,8 @@ def register_tools(mcp: FastMCP) -> None:
             priority:    One of 'Lowest', 'Low', 'Medium', 'High', 'Highest'.
                          Defaults to 'Medium'.
         """
-        key = get_default_project()
         try:
-            jira = get_client()
-            issue_dict = {
-                "project": {"key": key},
-                "summary": summary,
-                "description": description,
-                "issuetype": {"name": "Task"},
-                "priority": {"name": priority.value},
-            }
-            new_issue = jira.create_issue(fields=issue_dict)
-            return IssueItemResponse(
-                key=new_issue.key,
-                summary=new_issue.fields.summary,
-                status=new_issue.fields.status.name,
-                url=issue_url(new_issue.key),
-            )
+            return _service.create_issue(summary, description, priority)
         except JIRAError as e:
             return {"error": f"Jira API error [{e.status_code}]: {e.text}"}
         except Exception as e:
@@ -142,34 +114,7 @@ def register_tools(mcp: FastMCP) -> None:
             issue_key: The Jira issue key (e.g. 'PROJ-42').
         """
         try:
-            jira = get_client()
-            issue = jira.issue(
-                issue_key,
-                fields="summary,status,priority,assignee,comment,created,updated",
-            )
-            fields = issue.fields
-
-            comments_raw = getattr(fields.comment, "comments", [])
-            recent_comments = [
-                CommentItem(
-                    author=c.author.displayName,
-                    body=c.body[:300] + ("..." if len(c.body) > 300 else ""),
-                    created=c.created[:10],
-                )
-                for c in comments_raw[-3:]
-            ]
-
-            return IssueDetailsResponse(
-                key=issue.key,
-                summary=fields.summary,
-                status=fields.status.name,
-                priority=fields.priority.name if fields.priority else "Não definida",
-                assignee=fields.assignee.displayName if fields.assignee else "Não atribuído",
-                created=fields.created[:10],
-                updated=fields.updated[:10],
-                recent_comments=recent_comments,
-                url=issue_url(issue.key),
-            )
+            return _service.get_issue_details(issue_key)
         except JIRAError as e:
             return {"error": f"Jira API error [{e.status_code}]: {e.text}"}
         except Exception as e:
@@ -189,16 +134,7 @@ def register_tools(mcp: FastMCP) -> None:
             comment:   The comment text to append (plain text).
         """
         try:
-            jira = get_client()
-            new_comment = jira.add_comment(issue_key, comment)
-            return AddCommentResponse(
-                issue_key=issue_key,
-                comment_id=new_comment.id,
-                author=new_comment.author.displayName,
-                created=new_comment.created[:10],
-                url=issue_url(issue_key),
-                message=f"Comentário adicionado com sucesso ao ticket {issue_key}.",
-            )
+            return _service.add_comment(issue_key, comment)
         except JIRAError as e:
             return {"error": f"Jira API error [{e.status_code}]: {e.text}"}
         except Exception as e:
@@ -222,53 +158,10 @@ def register_tools(mcp: FastMCP) -> None:
                          Leave empty to return all non-'Concluído' issues.
             max_results: Maximum number of issues to return (default 10).
         """
-        key = get_default_project()
         try:
-            jira = get_client()
-
-            users = jira.search_users(query=email)
-            if not users:
-                return [{"error": f"No Jira user found for e-mail: {email}"}]
-
-            account_id = users[0].accountId
-
-            base = f'project = "{key}" AND reporter = "{account_id}" AND status != "Concluído"'
-            if status:
-                base += f' AND status = "{status}"'
-            jql = base + " ORDER BY created DESC"
-
-            issues = jira.search_issues(jql, maxResults=max_results)
-
-            completed_jql = (
-                f'project = "{key}" AND reporter = "{account_id}" AND status = "Concluído"'
-            )
-            completed_issues = jira.search_issues(completed_jql, maxResults=1)
-
-            result: list = []
-            if completed_issues:
-                result.append(
-                    {
-                        "_agent_note": (
-                            "Existem chamados reportados por este usuário com status "
-                            "'Concluído'. Informe ao usuário que essas ações já foram "
-                            "realizadas, sem listá-las individualmente."
-                        )
-                    }
-                )
-
-            result.extend(
-                [
-                    ReportedIssueItem(
-                        key=issue.key,
-                        summary=issue.fields.summary,
-                        status=issue.fields.status.name,
-                        created=issue.fields.created[:10],
-                        url=issue_url(issue.key),
-                    )
-                    for issue in issues
-                ]
-            )
-            return result
+            return _service.list_my_reported(email, status, max_results)
+        except UserNotFoundError as e:
+            return [{"error": str(e)}]
         except JIRAError as e:
             return [{"error": f"Jira API error [{e.status_code}]: {e.text}"}]
         except Exception as e:

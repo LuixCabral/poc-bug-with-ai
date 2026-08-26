@@ -74,7 +74,7 @@ Quando o N1 pedir um histórico (ex: "quais tickets eu abri essa semana?",
 
 def build_agent(mcp_tools: MCPTools) -> Agent:
     return Agent(
-        model=HuggingFace(id="Qwen/Qwen2.5-72B-Instruct"),
+        model=HuggingFace(id="Qwen/Qwen3.8-27B"),
         tools=[mcp_tools],
         tool_call_limit=6,
         instructions=SYSTEM_PROMPT,
@@ -100,7 +100,7 @@ async def main() -> None:
 
     async with MCPTools(
         server_params=server_params,
-        exclude_tools=["get_project_info"],   # agent already knows to use "Bug"
+        exclude_tools=["get_project_info"],
     ) as mcp_tools:
         agent = build_agent(mcp_tools)
 
