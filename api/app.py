@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 import os
 import sys
 from contextlib import asynccontextmanager
@@ -6,7 +6,7 @@ from typing import AsyncGenerator
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
-from agno.db.postgres import AsyncPostgresDb
+from agno.db.postgres import PostgresDb
 from agno.tools.mcp import MCPTools
 from mcp import StdioServerParameters
 
@@ -27,7 +27,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             "Configure-a no .env antes de iniciar a API."
         )
 
-    db = AsyncPostgresDb(db_url=database_url)
+    sync_url = database_url.replace("+psycopg_async", "+psycopg").replace(
+        "+asyncpg", "+psycopg"
+    )
+    db = PostgresDb(db_url=sync_url)
 
     server_params = StdioServerParameters(
         command=sys.executable,

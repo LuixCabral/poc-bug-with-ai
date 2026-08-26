@@ -5,8 +5,8 @@ import asyncio
 from dotenv import load_dotenv
 from agno.agent import Agent
 from agno.models.huggingface import HuggingFace
-from agno.db.base import BaseDb, AsyncBaseDb
-from agno.db.postgres import AsyncPostgresDb
+from agno.db.base import BaseDb
+from agno.db.postgres import PostgresDb
 from agno.tools.mcp import MCPTools
 from mcp import StdioServerParameters
 
@@ -24,11 +24,15 @@ Essas ações são exclusivas do N2. Você apenas reporta e enriquece informaç�
 
 ━━━ CENÁRIO 1 — Abrir um novo chamado ━━━
 Quando o N1 descreve um problema:
-1. Chame `search_issues` UMA VEZ com os termos-chave para verificar duplicatas.
-   - Se encontrar algo parecido, mostre e pergunte: "Já existe o <KEY>. Quer
-     adicionar seus detalhes como comentário nele, ou é um problema diferente?"
-2. Se não houver duplicata (ou o N1 confirmar que é novo), chame `create_issue`
-   EXATAMENTE UMA VEZ com um relato estruturado em PORTUGUÊS em TEXTO SIMPLES
+1. É OBRIGATÓRIO chamar `search_issues` PRIMEIRO, antes de qualquer outra ação.
+   Use 2–4 palavras-chave do relato para buscar por duplicatas.
+   - Se encontrar ticket parecido (mesmo componente, mesmo erro): mostre ao N1
+     e pergunte: "Já existe o <KEY> com descrição similar. Quer adicionar seus
+     detalhes como comentário nele, ou é um problema diferente?"
+   - Se não encontrar nada: prossiga para o passo 2.
+2. Somente após o `search_issues` retornar sem duplicatas (ou o N1 confirmar
+   que é um problema diferente), chame `create_issue` EXATAMENTE UMA VEZ com
+   relato estruturado em PORTUGUÊS em TEXTO SIMPLES
    (sem markdown, sem **, sem #, sem símbolos de bullet):
    - summary: Título conciso e orientado à ação.
    - description com as seções:
@@ -63,24 +67,45 @@ Quando o N1 pedir um histórico (ex: "quais tickets eu abri essa semana?",
   com: chave, resumo, status e prioridade.
 
 ━━━ REGRAS ESTRITAS ━━━
+- NUNCA chame `create_issue` sem antes chamar `search_issues` — sem exceções.
 - NUNCA chame `create_issue` mais de uma vez por mensagem do usuário.
 - NUNCA tente mover, atribuir ou resolver um ticket — isso não é seu papel.
 - NUNCA refaça uma ação que já retornou com sucesso.
 - Se faltar informação crítica, faça UMA pergunta objetiva antes de agir.
 - Sempre responda em Português.
+
+━━━ HISTÓRICO DE CONVERSA ━━━
+Você tem acesso ao histórico da conversa atual. Use-o APENAS para entender o
+contexto — por exemplo, qual ticket foi aberto antes, ou o que o N1 relatou
+anteriormente. NUNCA use o histórico para reaproveitar uma ação passada como
+resposta a uma nova mensagem. Cada mensagem nova do usuário deve ser tratada
+como uma solicitação nova e independente, que pode requerer chamar tools.
 """
 
 # ─── Agent factory ────────────────────────────────────────────────────────────
 
 
-def build_agent(mcp_tools: MCPTools, db: BaseDb | AsyncBaseDb | None = None) -> Agent:
+def build_agent(mcp_tools: MCPTools, db: BaseDb | None = None) -> Agent:
+    if db is None:
+        database_url = os.environ.get("DATABASE_URL")
+        if not database_url:
+            raise RuntimeError(
+                "Variável de ambiente DATABASE_URL não encontrada. "
+                "Configure-a no .env antes de iniciar o agente."
+            )
+        # URL síncrona: trocar driver async pelo sync do psycopg
+        sync_url = database_url.replace("+psycopg_async", "+psycopg").replace(
+            "+asyncpg", "+psycopg"
+        )
+        db = PostgresDb(db_url=sync_url)
+
     return Agent(
         model=HuggingFace(id="Qwen/Qwen3.8-27B"),
         tools=[mcp_tools],
         tool_call_limit=6,
         instructions=SYSTEM_PROMPT,
         markdown=True,
-        db=AsyncPostgresDb(db_url=os.environ.get("DATABASE_URL")),
+        db=db,
         add_history_to_context=True,
         read_chat_history=True,
         num_history_messages=8,
