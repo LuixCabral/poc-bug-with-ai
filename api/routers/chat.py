@@ -2,7 +2,7 @@ import uuid
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from agno.agent import Agent
+from agno.team import Team
 
 from api.dependencies import get_agent
 from api.schemas.chat import ChatRequest, ChatResponse
@@ -24,7 +24,7 @@ router = APIRouter(tags=["chat"])
 )
 async def chat(
     body: ChatRequest,
-    agent: Agent = Depends(get_agent),
+    agent: Team = Depends(get_agent),
 ) -> ChatResponse:
     session_id = body.session_id or str(uuid.uuid4())
     try:

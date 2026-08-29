@@ -11,7 +11,7 @@ from agno.db.postgres import PostgresDb
 from agno.tools.mcp import MCPTools
 from mcp import StdioServerParameters
 
-from main import build_agent
+from Ai import build_team
 from api.routers import chat
 
 load_dotenv()
@@ -44,9 +44,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         server_params=server_params,
         exclude_tools=["get_project_info"],
     ) as mcp_tools:
-        logger.info("MCPTools inicializado. Construindo agente...")
-        app.state.agent = build_agent(mcp_tools, db=db)
-        logger.info("Agente pronto. API disponível.")
+        logger.info("MCPTools inicializado. Construindo team...")
+        app.state.team = build_team(mcp_tools, db=db)
+        logger.info("Team pronto. API disponível.")
         yield
 
     logger.info("MCPTools encerrado. Shutdown concluído.")

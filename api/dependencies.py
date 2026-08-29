@@ -1,6 +1,6 @@
-﻿from fastapi import Request
-from agno.agent import Agent
+from fastapi import Request
+from agno.team import Team
 
 
-def get_agent(request: Request) -> Agent:
-    return request.app.state.agent
+def get_agent(request: Request) -> Team:
+    return request.app.state.team
