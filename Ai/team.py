@@ -5,7 +5,7 @@ from agno.models.huggingface import HuggingFace
 from agno.team import Team
 from agno.tools.mcp import MCPTools
 
-from .agents import build_atendimento_agent
+from .agents import build_atendimento_agent, build_docs_agent
 
 # ─── Triage prompt ────────────────────────────────────────────────────────────
 
@@ -17,8 +17,8 @@ TRIAGE_PROMPT = _TRIAGE_PROMPT_PATH.read_text(encoding="utf-8")
 
 
 def build_team(mcp_tools: MCPTools, db: BaseDb | None = None) -> Team:
-    
     atendimento = build_atendimento_agent(mcp_tools, db)
+    docs = build_docs_agent(db)
 
     return Team(
         name="TriageAgent",
@@ -26,6 +26,7 @@ def build_team(mcp_tools: MCPTools, db: BaseDb | None = None) -> Team:
         model=HuggingFace(id="Qwen/Qwen3-8B"),
         members=[
             atendimento,
+            docs,
         ],
         instructions=TRIAGE_PROMPT,
         markdown=True,
