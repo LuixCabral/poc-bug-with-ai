@@ -16,9 +16,9 @@ TRIAGE_PROMPT = _TRIAGE_PROMPT_PATH.read_text(encoding="utf-8")
 # ─── Team factory ─────────────────────────────────────────────────────────────
 
 
-def build_team(mcp_tools: MCPTools, db: BaseDb | None = None) -> Team:
+def build_team(mcp_tools: MCPTools, notion_mcp_tools: MCPTools, db: BaseDb | None = None) -> Team:
     atendimento = build_atendimento_agent(mcp_tools, db)
-    docs = build_docs_agent(db)
+    docs = build_docs_agent(notion_mcp_tools, db)
 
     return Team(
         name="TriageAgent",

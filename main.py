@@ -15,39 +15,46 @@ load_dotenv()
 
 
 async def main() -> None:
-    server_params = StdioServerParameters(
+    jira_params = StdioServerParameters(
         command=sys.executable,
         args=["-m", "jira_mcp.server"],
         env={**os.environ},
     )
+    notion_params = StdioServerParameters(
+        command=sys.executable,
+        args=["-m", "notion_mcp.server"],
+        env={**os.environ},
+    )
 
     async with MCPTools(
-        server_params=server_params,
+        server_params=jira_params,
         exclude_tools=["get_project_info"],
-    ) as mcp_tools:
-        team = build_team(mcp_tools)
+    ) as jira_tools:
+        async with MCPTools(server_params=notion_params) as notion_tools:
+            team = build_team(jira_tools, notion_tools)
 
-        # ── Interactive mode ──────────────────────────────────────────────────
-        print("🤖 Bug Reporter Team (type 'exit' or Ctrl-C to quit)\n")
-        loop = asyncio.get_event_loop()
-        while True:
-            try:
-                user_input = (
-                    await loop.run_in_executor(None, lambda: input("You: "))
-                ).strip()
-            except (KeyboardInterrupt, EOFError):
-                print("\nBye!")
-                break
+            # ── Interactive mode ──────────────────────────────────────────────
+            print("🤖 Bug Reporter Team (type 'exit' or Ctrl-C to quit)\n")
+            loop = asyncio.get_event_loop()
+            while True:
+                try:
+                    user_input = (
+                        await loop.run_in_executor(None, lambda: input("You: "))
+                    ).strip()
+                except (KeyboardInterrupt, EOFError):
+                    print("\nBye!")
+                    break
 
-            if not user_input:
-                continue
+                if not user_input:
+                    continue
 
-            if user_input.lower() in {"exit", "quit"}:
-                break
+                if user_input.lower() in {"exit", "quit"}:
+                    break
 
-            await team.aprint_response(user_input, stream=True)
-            print()
+                await team.aprint_response(user_input, stream=True)
+                print()
 
 
 if __name__ == "__main__":
     asyncio.run(main())
+

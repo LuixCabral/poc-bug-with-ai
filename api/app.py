@@ -38,18 +38,25 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         args=["-m", "jira_mcp.server"],
         env={**os.environ},
     )
+    notion_params = StdioServerParameters(
+        command=sys.executable,
+        args=["-m", "notion_mcp.server"],
+        env={**os.environ},
+    )
 
     logger.info("Iniciando MCPTools (jira_mcp.server)...")
     async with MCPTools(
         server_params=server_params,
         exclude_tools=["get_project_info"],
-    ) as mcp_tools:
-        logger.info("MCPTools inicializado. Construindo team...")
-        app.state.team = build_team(mcp_tools, db=db)
-        logger.info("Team pronto. API disponível.")
-        yield
+    ) as jira_tools:
+        logger.info("Iniciando MCPTools (notion_mcp.server)...")
+        async with MCPTools(server_params=notion_params) as notion_tools:
+            logger.info("MCPTools inicializados. Construindo team...")
+            app.state.team = build_team(jira_tools, notion_tools, db=db)
+            logger.info("Team pronto. API disponível.")
+            yield
 
-    logger.info("MCPTools encerrado. Shutdown concluído.")
+    logger.info("MCPTools encerrados. Shutdown concluído.")
 
 
 app = FastAPI(
