@@ -1,7 +1,8 @@
 from pathlib import Path
 
 from agno.agent import Agent
-from agno.models.huggingface import HuggingFace
+#from agno.models.huggingface import HuggingFace
+from agno.models.openrouter import OpenRouter
 from agno.db.base import BaseDb
 from agno.tools.mcp import MCPTools
 
@@ -17,7 +18,7 @@ def build_docs_agent(mcp_tools: MCPTools, db: BaseDb | None = None) -> Agent:
     return Agent(
         name="DocsAgent",
         role="Agente de documentação: Consulta e tira dúvidas sobre o Agenda Vix (Admin)",
-        model=HuggingFace(id="Qwen/Qwen3-72B"),
+        model=OpenRouter(id="x-ai/grok-4.3"),
         tools=[mcp_tools],
         tool_call_limit=6,
         instructions=DOCS_PROMPT,

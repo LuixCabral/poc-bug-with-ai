@@ -1,7 +1,8 @@
 from pathlib import Path
 
 from agno.db.base import BaseDb
-from agno.models.huggingface import HuggingFace
+#from agno.models.huggingface import HuggingFace
+from agno.models.openrouter import OpenRouter
 from agno.team import Team
 from agno.tools.mcp import MCPTools
 
@@ -23,7 +24,7 @@ def build_team(mcp_tools: MCPTools, notion_mcp_tools: MCPTools, db: BaseDb | Non
     return Team(
         name="TriageAgent",
         mode="coordinate",
-        model=HuggingFace(id="Qwen/Qwen3-8B"),
+        model=OpenRouter(id="gpt-oss-20b"),
         members=[
             atendimento,
             docs,

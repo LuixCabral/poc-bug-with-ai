@@ -48,9 +48,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     async with MCPTools(
         server_params=server_params,
         exclude_tools=["get_project_info"],
+        timeout_seconds=30,
     ) as jira_tools:
         logger.info("Iniciando MCPTools (notion_mcp.server)...")
-        async with MCPTools(server_params=notion_params) as notion_tools:
+        async with MCPTools(server_params=notion_params, timeout_seconds=60) as notion_tools:
             logger.info("MCPTools inicializados. Construindo team...")
             app.state.team = build_team(jira_tools, notion_tools, db=db)
             logger.info("Team pronto. API disponível.")

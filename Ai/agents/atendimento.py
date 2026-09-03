@@ -1,7 +1,8 @@
 from pathlib import Path
 
 from agno.agent import Agent
-from agno.models.huggingface import HuggingFace
+#from agno.models.huggingface import HuggingFace
+from agno.models.openrouter import OpenRouter
 from agno.db.base import BaseDb
 from agno.tools.mcp import MCPTools
 
@@ -17,7 +18,7 @@ def build_atendimento_agent(mcp_tools: MCPTools, db: BaseDb | None = None) -> Ag
     return Agent(
         name="AtendimentoAgent",
         role="Agente de atendimento N1: abre, consulta, enriquece e lista chamados no Jira.",
-        model=HuggingFace(id="Qwen/Qwen3-8B"),
+        model=OpenRouter(id="x-ai/grok-4.3"),
         tools=[mcp_tools],
         tool_call_limit=6,
         instructions=ATENDIMENTO_PROMPT,
