@@ -32,7 +32,6 @@ async def chat(
         content = run_response.content if run_response.content else ""
         return ChatResponse(session_id=session_id, response=content)
     except Exception as exc:
-        logger.exception("Erro ao executar o agente para session_id=%s", session_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erro interno do agente: {exc}",

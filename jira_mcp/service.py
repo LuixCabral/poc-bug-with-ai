@@ -87,7 +87,7 @@ class JiraService:
             "project": {"key": self.default_project},
             "summary": summary,
             "description": description,
-            "issuetype": {"name": "Task"},
+            "issuetype": {"name": "Task"}, # TODO: verificar nome do tipo de tarefa no jira
             "priority": {"name": priority.value},
         }
         new_issue = self.client.create_issue(fields=issue_dict)
