@@ -1,41 +1,72 @@
+import json
 import uuid
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from agno.run.agent import RunStartedEvent as AgentRunStartedEvent
+from agno.run.team import RunContentEvent as TeamRunContentEvent
+
+from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from agno.team import Team
 
 from api.dependencies import get_agent
-from api.schemas.chat import ChatRequest, ChatResponse
+from api.schemas.chat import ChatRequest
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["chat"])
 
 
+def _sse(**kwargs) -> str:
+    """Serializa um dict como linha SSE."""
+    return f"data: {json.dumps(kwargs)}\n\n"
+
+
 @router.post(
     "/chat",
-    response_model=ChatResponse,
     summary="Enviar mensagem ao agente",
     description=(
         "Recebe a mensagem do usuário N1 e o session_id, "
         "executa o agente (com histórico isolado por sessão no PostgreSQL) "
-        "e retorna a resposta em texto."
+        "e retorna a resposta em streaming SSE (text/event-stream)."
     ),
 )
 async def chat(
     body: ChatRequest,
     agent: Team = Depends(get_agent),
-) -> ChatResponse:
+) -> StreamingResponse:
     session_id = body.session_id or str(uuid.uuid4())
-    try:
-        run_response = await agent.arun(body.message, session_id=session_id)
-        content = run_response.content if run_response.content else ""
-        return ChatResponse(session_id=session_id, response=content)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro interno do agente: {exc}",
-        ) from exc
+
+    async def event_generator():
+        try:
+            yield _sse(event="session", session_id=session_id)
+
+            active_agent: str = "assistant"  # membro acionado pelo TriageAgent
+
+            async for chunk in agent.arun(
+                body.message,
+                session_id=session_id,
+                stream=True,
+                stream_events=True,
+            ):
+                if isinstance(chunk, AgentRunStartedEvent):
+                    # Registra qual agente membro foi acionado
+                    active_agent = chunk.agent_name or "assistant"
+                elif isinstance(chunk, TeamRunContentEvent) and chunk.content:
+                    # Síntese final do TriageAgent — identifica com o membro que respondeu
+                    yield _sse(
+                        event="delta",
+                        content=chunk.content,
+                        agent_name=active_agent,
+                    )
+
+            yield _sse(event="done")
+
+        except Exception as exc:
+            logger.error("Erro no stream do agente: %s", exc)
+            yield _sse(event="error", detail=str(exc))
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @router.get(

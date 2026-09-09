@@ -1,8 +1,8 @@
 from pathlib import Path
 
 from agno.db.base import BaseDb
-#from agno.models.huggingface import HuggingFace
 from agno.models.openrouter import OpenRouter
+from agno.models.message import Message
 from agno.team import Team
 from agno.tools.mcp import MCPTools
 
@@ -31,7 +31,7 @@ def build_team(mcp_tools: MCPTools, notion_mcp_tools: MCPTools, db: BaseDb | Non
         ],
         instructions=TRIAGE_PROMPT,
         markdown=True,
-        show_members_responses=True,
+        show_members_responses=False,
         add_team_history_to_members=True,
         num_team_history_runs=4,
     )

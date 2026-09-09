@@ -1,10 +1,12 @@
-﻿from pydantic import BaseModel, Field
+from typing import Literal
+
+from pydantic import BaseModel, Field
 
 
 class ChatRequest(BaseModel):
 
     message: str = Field(..., description="Mensagem do usuário N1 em linguagem natural.")
-    session_id: str = Field(
+    session_id: str | None = Field(
         default=None,
         description=(
             "UUID de sessão gerado pelo cliente. "
@@ -13,6 +15,9 @@ class ChatRequest(BaseModel):
     )
 
 
-class ChatResponse(BaseModel):
-    session_id: str = Field(..., description="Mesmo session_id enviado na requisição.")
-    response: str = Field(..., description="Resposta do agente em texto (pode conter Markdown).")
+class StreamEvent(BaseModel):
+    event: Literal["session", "delta", "done", "error"]
+    session_id: str | None = None
+    content: str | None = None
+    agent_name: str | None = None
+    detail: str | None = None

@@ -3,6 +3,7 @@ from pathlib import Path
 from agno.agent import Agent
 #from agno.models.huggingface import HuggingFace
 from agno.models.openrouter import OpenRouter
+from agno.models.message import Message
 from agno.db.base import BaseDb
 from agno.tools.mcp import MCPTools
 
