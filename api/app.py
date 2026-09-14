@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from agno.db.postgres import PostgresDb
 from agno.tools.mcp import MCPTools
 from mcp import StdioServerParameters
@@ -72,6 +73,10 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# ─── Trusted proxies (anti X-Forwarded-For spoofing) ────────────────────────
+_trusted_proxies = os.getenv("TRUSTED_PROXY_IPS", "127.0.0.1")
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=_trusted_proxies)
 
 # ─── Rate limiting ────────────────────────────────────────────────────────────
 app.state.limiter = limiter
