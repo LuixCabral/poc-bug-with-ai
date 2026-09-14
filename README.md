@@ -35,6 +35,8 @@ cp .env.example .env
 | `JIRA_API_TOKEN` | [Gere um API token](https://id.atlassian.com/manage-profile/security/api-tokens) |
 | `JIRA_PROJECT_KEY` | Chave do projeto onde os tickets serão criados (ex: `PROJ`) |
 | `DATABASE_URL` | URL de conexão PostgreSQL (necessário apenas para a API HTTP) |
+| `REDIS_URL` | URL de conexão Redis para o rate limiter (ex: `redis://localhost:6379`) |
+| `RATE_LIMIT_CHAT` | Limite de requisições por IP no `/api/chat` (ex: `10/minute`) |
 | `NOTION_API_TOKEN` | Token da integração Notion — [crie aqui](https://www.notion.so/my-integrations) |
 | `NOTION_ROOT_PAGE_ID` | ID da página raiz da documentação (opcional, mas recomendado) |
 
@@ -63,9 +65,14 @@ You: Como faço para configurar um agendamento recorrente?
 
 ---
 
-### Modo API (FastAPI + PostgreSQL)
+### Modo API (FastAPI + PostgreSQL + Redis)
 
 ```bash
+# Sobe PostgreSQL e Redis
+docker compose up -d
+
+# Instala dependências e inicia a API
+uv sync
 uv run uvicorn api.app:app --reload --port 8000
 ```
 
@@ -84,6 +91,7 @@ uv run uvicorn api.app:app --reload --port 8000
 
 ```
 main.py (CLI) / api/app.py (FastAPI)
+  └── SlowAPIMiddleware  ← rate limiting por IP via Redis
   └── TriageAgent  ← orquestrador (mode="coordinate")
         ├── AtendimentoAgent
         │     └── MCPTools (stdio) → jira_mcp.server (FastMCP)

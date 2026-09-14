@@ -7,11 +7,14 @@ from typing import AsyncGenerator
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from agno.db.postgres import PostgresDb
 from agno.tools.mcp import MCPTools
 from mcp import StdioServerParameters
 
 from Ai import build_team
+from api.rate_limit import limiter, rate_limit_exceeded_handler
 from api.routers import chat
 
 load_dotenv()
@@ -70,6 +73,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"],)
+# ─── Rate limiting ────────────────────────────────────────────────────────────
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
+# ─── Middleware ───────────────────────────────────────────────────────────────
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+# ─── Routers ─────────────────────────────────────────────────────────────────
 app.include_router(chat.router, prefix="/api")

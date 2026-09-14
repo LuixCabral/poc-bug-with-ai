@@ -5,11 +5,12 @@ import logging
 from agno.run.agent import RunStartedEvent as AgentRunStartedEvent
 from agno.run.team import RunContentEvent as TeamRunContentEvent
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from agno.team import Team
 
 from api.dependencies import get_agent
+from api.rate_limit import limiter, CHAT_RATE_LIMIT
 from api.schemas.chat import ChatRequest
 
 logger = logging.getLogger(__name__)
@@ -31,7 +32,9 @@ def _sse(**kwargs) -> str:
         "e retorna a resposta em streaming SSE (text/event-stream)."
     ),
 )
+@limiter.limit(CHAT_RATE_LIMIT)
 async def chat(
+    request: Request,
     body: ChatRequest,
     agent: Team = Depends(get_agent),
 ) -> StreamingResponse:
